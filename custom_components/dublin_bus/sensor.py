@@ -84,6 +84,7 @@ class DublinBusSensor(CoordinatorEntity, SensorEntity):
             "stop_name": stop_data.get("stop_name"),
             "next_buses": next_buses,
             "last_update": stop_data.get("last_update"),
+            "last_fetch_time": datetime.fromisoformat(stop_data.get("last_update")).strftime("%H:%M:%S"),
             "attribution": ATTRIBUTION,
         }
 

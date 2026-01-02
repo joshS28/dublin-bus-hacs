@@ -4,6 +4,7 @@ DOMAIN = "dublin_bus"
 
 CONF_STOP_IDS = "stop_ids"
 CONF_ROUTE_FILTERS = "route_filters"
+CONF_SCAN_INTERVAL = "scan_interval"
 
 # TFI LTS API endpoints
 LTS_BASE_URL = "https://api-lts.transportforireland.ie/lts/lts/v1/public"

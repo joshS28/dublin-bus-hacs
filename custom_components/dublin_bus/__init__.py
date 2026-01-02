@@ -9,19 +9,20 @@ from homeassistant.const import Platform
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 
-from .const import DOMAIN
+from .const import DOMAIN, CONF_SCAN_INTERVAL, DEFAULT_SCAN_INTERVAL
 from .api import DublinBusAPI
 
 _LOGGER = logging.getLogger(__name__)
 
 PLATFORMS: list[Platform] = [Platform.SENSOR]
 
-SCAN_INTERVAL = timedelta(seconds=30)
-
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Set up Dublin Bus RTPI from a config entry."""
     hass.data.setdefault(DOMAIN, {})
+
+    # Default scan interval is 30 seconds
+    scan_interval = entry.options.get(CONF_SCAN_INTERVAL, DEFAULT_SCAN_INTERVAL)
 
     api_keys = [entry.data["primary_api_key"]]
     if entry.data.get("secondary_api_key"):
@@ -45,10 +46,12 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         _LOGGER,
         name=DOMAIN,
         update_method=async_update_data,
-        update_interval=SCAN_INTERVAL,
+        update_interval=timedelta(seconds=scan_interval),
     )
 
     await coordinator.async_config_entry_first_refresh()
+
+    entry.async_on_unload(entry.add_to_hass_active_config_entries_options_listener(async_reload_entry))
 
     hass.data[DOMAIN][entry.entry_id] = {
         "coordinator": coordinator,
@@ -58,6 +61,11 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
 
     return True
+
+
+async def async_reload_entry(hass: HomeAssistant, entry: ConfigEntry) -> None:
+    """Reload config entry."""
+    await hass.config_entries.async_reload(entry.entry_id)
 
 
 async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
