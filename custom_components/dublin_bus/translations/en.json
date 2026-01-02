@@ -5,7 +5,8 @@
                 "title": "Dublin Bus RTPI Setup",
                 "description": "Enter your NTA API credentials and bus stop information",
                 "data": {
-                    "api_key": "NTA API Key",
+                    "primary_api_key": "Primary API Key",
+                    "secondary_api_key": "Secondary API Key (Optional)",
                     "stop_ids": "Stop IDs (comma-separated)",
                     "route_filters": "Route Filters (optional, comma-separated)"
                 }
