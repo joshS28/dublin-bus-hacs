@@ -8,7 +8,8 @@
                     "primary_api_key": "Primary API Key",
                     "secondary_api_key": "Secondary API Key (Optional)",
                     "stop_ids": "Stop IDs (comma-separated)",
-                    "route_filters": "Route Filters (optional, comma-separated)"
+                    "route_filters": "Route Filters (optional, comma-separated)",
+                    "scan_interval": "Refresh Interval (seconds)"
                 }
             }
         },
@@ -19,6 +20,16 @@
         },
         "abort": {
             "already_configured": "This integration is already configured."
+        }
+    },
+    "options": {
+        "step": {
+            "init": {
+                "title": "Dublin Bus RTPI Options",
+                "data": {
+                    "scan_interval": "Refresh Interval (seconds)"
+                }
+            }
         }
     }
 }
