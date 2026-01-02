@@ -100,7 +100,19 @@ class DublinBusAPI:
 
             # Process stop time updates
             for stop_time_update in trip_update.stop_time_update:
-                if stop_time_update.stop_id == stop_id:
+                # Flexible matching: match if IDs are identical OR if the feed ID ends with the user's numeric ID
+                feed_stop_id = stop_time_update.stop_id
+                is_match = False
+                
+                if feed_stop_id == stop_id:
+                    is_match = True
+                elif stop_id.isdigit() and feed_stop_id.endswith(stop_id):
+                    # Many NTA IDs are like 8220DB001192 for stop 1192
+                    is_match = True
+                elif stop_id.isdigit() and stop_id in feed_stop_id:
+                    is_match = True
+
+                if is_match:
                     arrival_time = None
                     if stop_time_update.HasField("arrival"):
                         arrival_time = stop_time_update.arrival.time
@@ -114,20 +126,26 @@ class DublinBusAPI:
                             if trip.HasField("trip_headsign")
                             else "Unknown"
                         )
+                        
+                        # Strip platform info from destination if present (e.g. "Destination - Platform 1")
+                        if " - " in destination:
+                            destination = destination.split(" - ")[0]
 
                         # Calculate minutes until arrival
                         now = datetime.now(timezone.utc).timestamp()
                         minutes_until = int((arrival_time - now) / 60)
 
-                        arrivals.append(
-                            {
-                                "route": route_id,
-                                "destination": destination,
-                                "arrival_timestamp": arrival_time,
-                                "minutes_until": minutes_until,
-                                "due_time": self._format_due_time(minutes_until),
-                            }
-                        )
+                        # Only include future arrivals
+                        if minutes_until >= -1:
+                            arrivals.append(
+                                {
+                                    "route": route_id,
+                                    "destination": destination,
+                                    "arrival_timestamp": arrival_time,
+                                    "minutes_until": max(0, minutes_until),
+                                    "due_time": self._format_due_time(minutes_until),
+                                }
+                            )
 
         # Sort by arrival time
         arrivals.sort(key=lambda x: x["arrival_timestamp"])
