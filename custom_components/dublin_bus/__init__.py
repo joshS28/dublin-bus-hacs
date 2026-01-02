@@ -23,8 +23,12 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Set up Dublin Bus RTPI from a config entry."""
     hass.data.setdefault(DOMAIN, {})
 
+    api_keys = [entry.data["primary_api_key"]]
+    if entry.data.get("secondary_api_key"):
+        api_keys.append(entry.data["secondary_api_key"])
+
     api = DublinBusAPI(
-        api_key=entry.data["api_key"],
+        api_keys=api_keys,
         stop_ids=entry.data["stop_ids"],
         route_filters=entry.data.get("route_filters", []),
     )

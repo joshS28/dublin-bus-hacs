@@ -18,7 +18,8 @@ _LOGGER = logging.getLogger(__name__)
 
 STEP_USER_DATA_SCHEMA = vol.Schema(
     {
-        vol.Required("api_key"): str,
+        vol.Required("primary_api_key"): str,
+        vol.Optional("secondary_api_key"): str,
         vol.Required(CONF_STOP_IDS): str,
         vol.Optional(CONF_ROUTE_FILTERS, default=""): str,
     }
@@ -26,10 +27,7 @@ STEP_USER_DATA_SCHEMA = vol.Schema(
 
 
 async def validate_input(hass: HomeAssistant, data: dict[str, Any]) -> dict[str, Any]:
-    """Validate the user input allows us to connect.
-
-    Data has the keys from STEP_USER_DATA_SCHEMA with values provided by the user.
-    """
+    """Validate the user input allows us to connect."""
     # Parse stop IDs
     stop_ids = [s.strip() for s in data[CONF_STOP_IDS].split(",") if s.strip()]
     if not stop_ids:
@@ -42,9 +40,14 @@ async def validate_input(hass: HomeAssistant, data: dict[str, Any]) -> dict[str,
             r.strip() for r in data[CONF_ROUTE_FILTERS].split(",") if r.strip()
         ]
 
+    # Collect keys
+    api_keys = [data["primary_api_key"]]
+    if data.get("secondary_api_key"):
+        api_keys.append(data["secondary_api_key"])
+
     # Test the API connection
     api = DublinBusAPI(
-        api_key=data["api_key"],
+        api_keys=api_keys,
         stop_ids=stop_ids,
         route_filters=route_filters,
     )
@@ -87,7 +90,8 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 return self.async_create_entry(
                     title=info["title"],
                     data={
-                        "api_key": user_input["api_key"],
+                        "primary_api_key": user_input["primary_api_key"],
+                        "secondary_api_key": user_input.get("secondary_api_key"),
                         "stop_ids": info["stop_ids"],
                         "route_filters": info["route_filters"],
                     },

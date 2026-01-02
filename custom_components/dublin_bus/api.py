@@ -18,52 +18,65 @@ class DublinBusAPI:
 
     def __init__(
         self,
-        api_key: str,
+        api_keys: list[str],
         stop_ids: list[str],
         route_filters: list[str] | None = None,
     ) -> None:
         """Initialize the API client."""
-        self.api_key = api_key
+        self.api_keys = api_keys
+        self.current_key_index = 0
         self.stop_ids = stop_ids
         self.route_filters = route_filters or []
         self.session = requests.Session()
+        self._update_headers()
+
+    def _update_headers(self) -> None:
+        """Update session headers with current API key."""
         self.session.headers.update(
             {
-                "x-api-key": api_key,
+                "x-api-key": self.api_keys[self.current_key_index],
                 "Cache-Control": "no-cache",
             }
         )
 
     def test_connection(self) -> bool:
         """Test the API connection."""
-        try:
-            response = self.session.get(API_TRIP_UPDATES, timeout=10)
-            response.raise_for_status()
-            return True
-        except Exception as err:
-            _LOGGER.error("Failed to connect to Dublin Bus API: %s", err)
-            raise
+        for _ in range(len(self.api_keys)):
+            try:
+                response = self.session.get(API_TRIP_UPDATES, timeout=10)
+                response.raise_for_status()
+                return True
+            except Exception as err:
+                _LOGGER.warning("Key %s failed: %s. Trying next key.", self.current_key_index, err)
+                self.current_key_index = (self.current_key_index + 1) % len(self.api_keys)
+                self._update_headers()
+        
+        raise Exception("All API keys failed connection test")
 
     def get_stop_data(self) -> dict[str, Any]:
         """Fetch real-time data for configured stops."""
-        try:
-            response = self.session.get(API_TRIP_UPDATES, timeout=10)
-            response.raise_for_status()
+        for _ in range(len(self.api_keys)):
+            try:
+                response = self.session.get(API_TRIP_UPDATES, timeout=10)
+                response.raise_for_status()
 
-            # Parse GTFS-Realtime protobuf data
-            feed = gtfs_realtime_pb2.FeedMessage()
-            feed.ParseFromString(response.content)
+                # Parse GTFS-Realtime protobuf data
+                feed = gtfs_realtime_pb2.FeedMessage()
+                feed.ParseFromString(response.content)
 
-            # Process data for each stop
-            stops_data = {}
-            for stop_id in self.stop_ids:
-                stops_data[stop_id] = self._process_stop_data(feed, stop_id)
+                # Process data for each stop
+                stops_data = {}
+                for stop_id in self.stop_ids:
+                    stops_data[stop_id] = self._process_stop_data(feed, stop_id)
 
-            return stops_data
+                return stops_data
 
-        except Exception as err:
-            _LOGGER.error("Error fetching Dublin Bus data: %s", err)
-            raise
+            except Exception as err:
+                _LOGGER.error("Error with key %s: %s. Rotating key.", self.current_key_index, err)
+                self.current_key_index = (self.current_key_index + 1) % len(self.api_keys)
+                self._update_headers()
+        
+        raise Exception("All API keys failed to fetch data")
 
     def _process_stop_data(
         self, feed: gtfs_realtime_pb2.FeedMessage, stop_id: str
