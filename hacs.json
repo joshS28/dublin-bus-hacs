@@ -1,0 +1,7 @@
+{
+    "name": "Dublin Bus RTPI",
+    "content_in_root": false,
+    "filename": "dublin_bus",
+    "render_readme": true,
+    "homeassistant": "2023.1.0"
+}

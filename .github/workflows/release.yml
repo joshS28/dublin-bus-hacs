@@ -1,0 +1,58 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*.*.*'
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Create Release
+        uses: actions/create-release@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tag_name: ${{ github.ref }}
+          release_name: Release ${{ github.ref }}
+          draft: false
+          prerelease: false
+          body: |
+            ## What's Changed
+            
+            See [CHANGELOG.md](CHANGELOG.md) for details.
+            
+            ## Installation
+            
+            ### Via HACS
+            1. Add this repository as a custom repository in HACS
+            2. Search for "Dublin Bus RTPI"
+            3. Install and restart Home Assistant
+            
+            ### Manual
+            1. Download the `dublin_bus.zip` from the assets below
+            2. Extract to `config/custom_components/`
+            3. Restart Home Assistant
+            
+            ## Configuration
+            
+            See [INSTALLATION.md](INSTALLATION.md) for detailed setup instructions.
+
+      - name: Create ZIP archive
+        run: |
+          cd custom_components
+          zip -r ../dublin_bus.zip dublin_bus/
+
+      - name: Upload Release Asset
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ steps.create_release.outputs.upload_url }}
+          asset_path: ./dublin_bus.zip
+          asset_name: dublin_bus.zip
+          asset_content_type: application/zip

@@ -1,0 +1,23 @@
+{
+    "config": {
+        "step": {
+            "user": {
+                "title": "Dublin Bus RTPI Setup",
+                "description": "Enter your NTA API credentials and bus stop information",
+                "data": {
+                    "api_key": "NTA API Key",
+                    "stop_ids": "Stop IDs (comma-separated)",
+                    "route_filters": "Route Filters (optional, comma-separated)"
+                }
+            }
+        },
+        "error": {
+            "cannot_connect": "Failed to connect to the Dublin Bus API. Please check your API key and internet connection.",
+            "invalid_stop_ids": "Please provide at least one valid stop ID.",
+            "unknown": "Unexpected error occurred. Please check the logs."
+        },
+        "abort": {
+            "already_configured": "This integration is already configured."
+        }
+    }
+}
