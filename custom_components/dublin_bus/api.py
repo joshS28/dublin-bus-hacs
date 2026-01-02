@@ -1,17 +1,16 @@
-"""API client for Dublin Bus RTPI."""
+"""API client for Dublin Bus RTPI using TFI LTS API."""
 from __future__ import annotations
 
 import logging
 from datetime import datetime, timezone
+import json
 from typing import Any
 
 import requests
-from google.transit import gtfs_realtime_pb2
 
-from .const import API_TRIP_UPDATES
+from .const import API_LOOKUP, API_DEPARTURES
 
 _LOGGER = logging.getLogger(__name__)
-
 
 class DublinBusAPI:
     """API client for Dublin Bus real-time information."""
@@ -24,138 +23,120 @@ class DublinBusAPI:
     ) -> None:
         """Initialize the API client."""
         self.api_keys = api_keys
-        self.current_key_index = 0
         self.stop_ids = stop_ids
         self.route_filters = route_filters or []
         self.session = requests.Session()
-        self._update_headers()
+        self.session.headers.update({
+            "Content-Type": "application/json",
+            "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+        })
+        self._stop_metadata = {}
 
-    def _update_headers(self) -> None:
-        """Update session headers with current API key."""
-        self.session.headers.update(
-            {
-                "x-api-key": self.api_keys[self.current_key_index],
-                "Cache-Control": "no-cache",
-            }
-        )
+    def _get_full_stop_info(self, stop_id: str) -> dict[str, Any] | None:
+        """Lookup stop name and full ID from short code."""
+        if stop_id in self._stop_metadata:
+            return self._stop_metadata[stop_id]
+
+        payload = {
+            "query": stop_id,
+            "excludeStopArea": False,
+            "language": "en"
+        }
+        
+        try:
+            response = self.session.post(API_LOOKUP, json=payload, timeout=10)
+            response.raise_for_status()
+            data = response.json()
+            
+            for item in data:
+                if item.get("shortCode") == stop_id or item.get("id") == stop_id:
+                    self._stop_metadata[stop_id] = {
+                        "full_id": item["id"],
+                        "name": item["name"],
+                        "type": item["type"]
+                    }
+                    return self._stop_metadata[stop_id]
+        except Exception as err:
+            _LOGGER.error("Error looking up stop %s: %s", stop_id, err)
+        
+        return None
 
     def test_connection(self) -> bool:
-        """Test the API connection."""
-        for _ in range(len(self.api_keys)):
-            try:
-                response = self.session.get(API_TRIP_UPDATES, timeout=10)
-                response.raise_for_status()
-                return True
-            except Exception as err:
-                _LOGGER.warning("Key %s failed: %s. Trying next key.", self.current_key_index, err)
-                self.current_key_index = (self.current_key_index + 1) % len(self.api_keys)
-                self._update_headers()
-        
-        raise Exception("All API keys failed connection test")
+        """Test by looking up the first stop."""
+        if not self.stop_ids:
+            return False
+        return self._get_full_stop_info(self.stop_ids[0]) is not None
 
     def get_stop_data(self) -> dict[str, Any]:
         """Fetch real-time data for configured stops."""
-        for _ in range(len(self.api_keys)):
+        stops_data = {}
+        now_ts = datetime.now(timezone.utc)
+        now_str = now_ts.strftime("%Y-%m-%dT%H:%M:%S.000Z")
+
+        for stop_id in self.stop_ids:
+            meta = self._get_full_stop_info(stop_id)
+            if not meta:
+                continue
+
+            payload = {
+                "clientTimeZoneOffsetInMS": 0,
+                "departureDate": now_str,
+                "departureOrArrival": "DEPARTURE",
+                "departureTime": now_str,
+                "refresh": False,
+                "requestTime": now_str,
+                "stopIds": [meta["full_id"]],
+                "stopName": meta["name"],
+                "stopType": meta["type"]
+            }
+
             try:
-                response = self.session.get(API_TRIP_UPDATES, timeout=10)
+                response = self.session.post(API_DEPARTURES, json=payload, timeout=10)
                 response.raise_for_status()
+                data = response.json()
+                
+                arrivals = []
+                for dep in data.get("stopDepartures", []):
+                    route = dep.get("serviceNumber")
+                    
+                    if self.route_filters and route not in self.route_filters:
+                        continue
 
-                # Parse GTFS-Realtime protobuf data
-                feed = gtfs_realtime_pb2.FeedMessage()
-                feed.ParseFromString(response.content)
+                    # Parse time
+                    time_str = dep.get("realTimeDeparture") or dep.get("scheduledDeparture")
+                    if not time_str:
+                        continue
+                        
+                    # Format: 2026-01-02T21:37:27.000+00:00
+                    try:
+                        dt = datetime.fromisoformat(time_str.replace("Z", "+00:00"))
+                        diff = int((dt - now_ts).total_seconds() / 60)
+                        
+                        if diff >= -1:
+                            arrivals.append({
+                                "route": route,
+                                "destination": dep.get("destination", "Unknown"),
+                                "arrival_timestamp": dt.timestamp(),
+                                "minutes_until": max(0, diff),
+                                "due_time": self._format_due_time(diff),
+                            })
+                    except Exception as e:
+                        _LOGGER.debug("Error parsing time %s: %s", time_str, e)
 
-                # Process data for each stop
-                stops_data = {}
-                for stop_id in self.stop_ids:
-                    stops_data[stop_id] = self._process_stop_data(feed, stop_id)
+                arrivals.sort(key=lambda x: x["arrival_timestamp"])
 
-                return stops_data
+                stops_data[stop_id] = {
+                    "stop_id": stop_id,
+                    "stop_name": meta["name"],
+                    "arrivals": arrivals,
+                    "count": len(arrivals),
+                    "last_update": now_ts.isoformat(),
+                }
 
             except Exception as err:
-                _LOGGER.error("Error with key %s: %s. Rotating key.", self.current_key_index, err)
-                self.current_key_index = (self.current_key_index + 1) % len(self.api_keys)
-                self._update_headers()
-        
-        raise Exception("All API keys failed to fetch data")
+                _LOGGER.error("Error fetching departures for %s: %s", stop_id, err)
 
-    def _process_stop_data(
-        self, feed: gtfs_realtime_pb2.FeedMessage, stop_id: str
-    ) -> dict[str, Any]:
-        """Process GTFS-R data for a specific stop."""
-        arrivals = []
-
-        for entity in feed.entity:
-            if not entity.HasField("trip_update"):
-                continue
-
-            trip_update = entity.trip_update
-            trip = trip_update.trip
-
-            # Get route number
-            route_id = trip.route_id if trip.HasField("route_id") else "Unknown"
-
-            # Apply route filter if configured
-            if self.route_filters and route_id not in self.route_filters:
-                continue
-
-            # Process stop time updates
-            for stop_time_update in trip_update.stop_time_update:
-                # Flexible matching: match if IDs are identical OR if the feed ID ends with the user's numeric ID
-                feed_stop_id = stop_time_update.stop_id
-                is_match = False
-                
-                if feed_stop_id == stop_id:
-                    is_match = True
-                elif stop_id.isdigit() and feed_stop_id.endswith(stop_id):
-                    # Many NTA IDs are like 8220DB001192 for stop 1192
-                    is_match = True
-                elif stop_id.isdigit() and stop_id in feed_stop_id:
-                    is_match = True
-
-                if is_match:
-                    arrival_time = None
-                    if stop_time_update.HasField("arrival"):
-                        arrival_time = stop_time_update.arrival.time
-                    elif stop_time_update.HasField("departure"):
-                        arrival_time = stop_time_update.departure.time
-
-                    if arrival_time:
-                        # Get trip headsign (destination)
-                        destination = (
-                            trip.trip_headsign
-                            if trip.HasField("trip_headsign")
-                            else "Unknown"
-                        )
-                        
-                        # Strip platform info from destination if present (e.g. "Destination - Platform 1")
-                        if " - " in destination:
-                            destination = destination.split(" - ")[0]
-
-                        # Calculate minutes until arrival
-                        now = datetime.now(timezone.utc).timestamp()
-                        minutes_until = int((arrival_time - now) / 60)
-
-                        # Only include future arrivals
-                        if minutes_until >= -1:
-                            arrivals.append(
-                                {
-                                    "route": route_id,
-                                    "destination": destination,
-                                    "arrival_timestamp": arrival_time,
-                                    "minutes_until": max(0, minutes_until),
-                                    "due_time": self._format_due_time(minutes_until),
-                                }
-                            )
-
-        # Sort by arrival time
-        arrivals.sort(key=lambda x: x["arrival_timestamp"])
-
-        return {
-            "stop_id": stop_id,
-            "arrivals": arrivals,
-            "count": len(arrivals),
-            "last_update": datetime.now(timezone.utc).isoformat(),
-        }
+        return stops_data
 
     @staticmethod
     def _format_due_time(minutes: int) -> str:

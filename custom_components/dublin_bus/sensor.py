@@ -81,6 +81,7 @@ class DublinBusSensor(CoordinatorEntity, SensorEntity):
 
         return {
             "stop_id": self._stop_id,
+            "stop_name": stop_data.get("stop_name"),
             "next_buses": next_buses,
             "last_update": stop_data.get("last_update"),
             "attribution": ATTRIBUTION,
