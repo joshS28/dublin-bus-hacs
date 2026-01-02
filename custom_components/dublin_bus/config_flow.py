@@ -21,50 +21,41 @@ STEP_USER_DATA_SCHEMA = vol.Schema(
     {
         vol.Required("primary_api_key"): str,
         vol.Optional("secondary_api_key"): str,
-        vol.Required(CONF_STOP_IDS): str,
-        vol.Optional(CONF_ROUTE_FILTERS, default=""): str,
+        vol.Required("stop_ids"): str,
+        vol.Optional("route_filters"): str,
+        vol.Optional("scan_interval", default=DEFAULT_SCAN_INTERVAL): vol.All(
+            vol.Coerce(int), vol.Range(min=10, max=300)
+        ),
     }
 )
 
-
 async def validate_input(hass: HomeAssistant, data: dict[str, Any]) -> dict[str, Any]:
     """Validate the user input allows us to connect."""
-    # Parse stop IDs
-    stop_ids = [s.strip() for s in data[CONF_STOP_IDS].split(",") if s.strip()]
-    if not stop_ids:
-        raise InvalidStopIds
-
-    # Parse route filters (optional)
-    route_filters = []
-    if data.get(CONF_ROUTE_FILTERS):
-        route_filters = [
-            r.strip() for r in data[CONF_ROUTE_FILTERS].split(",") if r.strip()
-        ]
-
-    # Collect keys
     api_keys = [data["primary_api_key"]]
     if data.get("secondary_api_key"):
         api_keys.append(data["secondary_api_key"])
 
-    # Test the API connection
-    api = DublinBusAPI(
-        api_keys=api_keys,
-        stop_ids=stop_ids,
-        route_filters=route_filters,
-    )
+    stop_ids = [s.strip() for s in data["stop_ids"].split(",")]
+    if not stop_ids:
+        raise InvalidStopIds
 
-    try:
-        await hass.async_add_executor_job(api.test_connection)
-    except Exception as err:
-        _LOGGER.error("Failed to connect to Dublin Bus API: %s", err)
-        raise CannotConnect from err
+    route_filters = []
+    if data.get("route_filters"):
+        route_filters = [r.strip() for r in data["route_filters"].split(",")]
+
+    api = DublinBusAPI(api_keys, stop_ids, route_filters)
+    
+    # Run the test in a separate thread because it's blocking
+    result = await hass.async_add_executor_job(api.test_connection)
+    
+    if not result:
+        raise CannotConnect
 
     return {
         "title": f"Dublin Bus ({len(stop_ids)} stops)",
         "stop_ids": stop_ids,
         "route_filters": route_filters,
     }
-
 
 class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     """Handle a config flow for Dublin Bus RTPI."""
@@ -77,7 +68,7 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         config_entry: config_entries.ConfigEntry,
     ) -> OptionsFlowHandler:
         """Get the options flow for this handler."""
-        return OptionsFlowHandler(config_entry)
+        return OptionsFlowHandler()
 
     async def async_step_user(
         self, user_input: dict[str, Any] | None = None
@@ -92,7 +83,7 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 errors["base"] = "cannot_connect"
             except InvalidStopIds:
                 errors["base"] = "invalid_stop_ids"
-            except Exception:  # pylint: disable=broad-except
+            except Exception: # pylint: disable=broad-except
                 _LOGGER.exception("Unexpected exception")
                 errors["base"] = "unknown"
             else:
@@ -105,14 +96,13 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                         "route_filters": info["route_filters"],
                     },
                     options={
-                        CONF_SCAN_INTERVAL: user_input.get(CONF_SCAN_INTERVAL, DEFAULT_SCAN_INTERVAL)
+                        CONF_SCAN_INTERVAL: user_input.get("scan_interval", DEFAULT_SCAN_INTERVAL)
                     }
                 )
 
         return self.async_show_form(
             step_id="user", data_schema=STEP_USER_DATA_SCHEMA, errors=errors
         )
-
 
 class OptionsFlowHandler(config_entries.OptionsFlow):
     """Handle options for Dublin Bus."""
@@ -138,10 +128,8 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
             ),
         )
 
-
 class CannotConnect(HomeAssistantError):
     """Error to indicate we cannot connect."""
 
-
 class InvalidStopIds(HomeAssistantError):
-    """Error to indicate invalid stop IDs."""
+    """Error to indicate stop IDs are invalid."""

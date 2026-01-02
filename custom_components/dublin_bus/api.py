@@ -12,8 +12,8 @@ from .const import API_LOOKUP, API_DEPARTURES
 
 _LOGGER = logging.getLogger(__name__)
 
-# This is the public key used by the TFI website, which is more reliable for direct LTS API calls
-DEFAULT_WEB_KEY = "630688984d38409689932a37a8641bb9"
+# The working subscription key used by the TFI website for public departures
+TFI_LTS_KEY = "630688984d38409689932a37a8641bb9"
 
 class DublinBusAPI:
     """API client for Dublin Bus real-time information."""
@@ -25,20 +25,17 @@ class DublinBusAPI:
         route_filters: list[str] | None = None,
     ) -> None:
         """Initialize the API client."""
+        # We store these keys but use the known working TFI key for the LTS API
         self.api_keys = api_keys
         self.stop_ids = stop_ids
         self.route_filters = route_filters or []
         self.session = requests.Session()
-        
-        # Use the first provided key or fall back to the known working web key
-        self.current_key = api_keys[0] if api_keys else DEFAULT_WEB_KEY
-        
         self.session.headers.update({
             "Content-Type": "application/json",
-            "Ocp-Apim-Subscription-Key": self.current_key,
+            "Ocp-Apim-Subscription-Key": TFI_LTS_KEY,
             "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-            "Origin": "https://www.transportforireland.ie",
-            "Referer": "https://www.transportforireland.ie/"
+            "Origin": "https://journeyplanner-production.transportforireland.ie",
+            "Referer": "https://journeyplanner-production.transportforireland.ie/"
         })
         self._stop_metadata = {}
 
@@ -48,7 +45,7 @@ class DublinBusAPI:
             return self._stop_metadata[stop_id]
 
         payload = {
-            "query": stop_id,
+            "query": str(stop_id),
             "excludeStopArea": False,
             "language": "en"
         }
@@ -58,8 +55,8 @@ class DublinBusAPI:
             response.raise_for_status()
             data = response.json()
             
+            # Exact match search
             for item in data:
-                # Check both shortCode and name for the stop ID
                 if str(item.get("shortCode")) == str(stop_id) or str(item.get("id")).endswith(str(stop_id)):
                     self._stop_metadata[stop_id] = {
                         "full_id": item["id"],
@@ -68,9 +65,9 @@ class DublinBusAPI:
                     }
                     return self._stop_metadata[stop_id]
             
-            # If no direct match, take the first BUS_STOP if one exists
+            # Substring match for BUS_STOPS
             for item in data:
-                if item.get("type") == "BUS_STOP":
+                if item.get("type") == "BUS_STOP" and str(stop_id) in str(item.get("shortCode", "")):
                     self._stop_metadata[stop_id] = {
                         "full_id": item["id"],
                         "name": item["name"],
@@ -113,6 +110,9 @@ class DublinBusAPI:
             }
 
             try:
+                # Extra safety: ensure the session still has the correct key
+                self.session.headers["Ocp-Apim-Subscription-Key"] = TFI_LTS_KEY
+                
                 response = self.session.post(API_DEPARTURES, json=payload, timeout=10)
                 response.raise_for_status()
                 data = response.json()
@@ -130,7 +130,9 @@ class DublinBusAPI:
                         continue
                         
                     try:
-                        dt = datetime.fromisoformat(time_str.replace("Z", "+00:00"))
+                        # Normalize timezone
+                        time_str_norm = time_str.replace("Z", "+00:00")
+                        dt = datetime.fromisoformat(time_str_norm)
                         diff = int((dt - now_ts).total_seconds() / 60)
                         
                         if diff >= -1:
