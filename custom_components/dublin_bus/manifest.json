@@ -1,13 +1,18 @@
 {
   "domain": "dublin_bus",
   "name": "Dublin Bus RTPI",
-  "codeowners": ["@joshS28"],
+  "codeowners": [
+    "@joshS28"
+  ],
   "config_flow": true,
   "dependencies": [],
-  "documentation": "https://github.com/joshS28/north-dublin-dog-walker",
+  "documentation": "https://github.com/joshS28/dublin-bus-hacs",
   "integration_type": "service",
   "iot_class": "cloud_polling",
-  "issue_tracker": "https://github.com/joshS28/north-dublin-dog-walker/issues",
-  "requirements": ["gtfs-realtime-bindings==1.0.0", "protobuf==4.25.1"],
+  "issue_tracker": "https://github.com/joshS28/dublin-bus-hacs/issues",
+  "requirements": [
+    "gtfs-realtime-bindings==1.0.0",
+    "protobuf==4.25.1"
+  ],
   "version": "1.0.0"
 }

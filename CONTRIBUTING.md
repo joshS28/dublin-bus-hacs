@@ -44,8 +44,8 @@ We welcome suggestions! Please open an issue with:
 
 1. Clone the repository:
 ```bash
-git clone https://github.com/joshS28/north-dublin-dog-walker.git
-cd north-dublin-dog-walker
+git clone https://github.com/joshS28/dublin-bus-hacs.git
+cd dublin-bus-hacs
 ```
 
 2. Install dependencies:

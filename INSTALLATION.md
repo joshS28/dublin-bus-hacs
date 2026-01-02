@@ -33,7 +33,7 @@ There are several ways to find Dublin Bus stop IDs:
 2. Go to "Integrations"
 3. Click the three dots (⋮) in the top right
 4. Select "Custom repositories"
-5. Add: `https://github.com/joshS28/north-dublin-dog-walker`
+5. Add: `https://github.com/joshS28/dublin-bus-hacs`
 6. Category: "Integration"
 7. Click "Add"
 8. Search for "Dublin Bus RTPI"

@@ -1,8 +1,8 @@
 # Dublin Bus RTPI for Home Assistant
 
 [![hacs_badge](https://img.shields.io/badge/HACS-Custom-orange.svg)](https://github.com/custom-components/hacs)
-[![GitHub release](https://img.shields.io/github/release/joshS28/north-dublin-dog-walker.svg)](https://github.com/joshS28/north-dublin-dog-walker/releases)
-[![License](https://img.shields.io/github/license/joshS28/north-dublin-dog-walker.svg)](LICENSE)
+[![GitHub release](https://img.shields.io/github/release/joshS28/dublin-bus-hacs.svg)](https://github.com/joshS28/dublin-bus-hacs/releases)
+[![License](https://img.shields.io/github/license/joshS28/dublin-bus-hacs.svg)](LICENSE)
 
 A Home Assistant custom component that integrates with Dublin Bus Real-Time Passenger Information (RTPI) using the National Transport Authority's GTFS-R API.
 
@@ -23,7 +23,7 @@ A Home Assistant custom component that integrates with Dublin Bus Real-Time Pass
 2. Click on "Integrations"
 3. Click the three dots in the top right corner
 4. Select "Custom repositories"
-5. Add this repository URL: `https://github.com/joshS28/north-dublin-dog-walker`
+5. Add this repository URL: `https://github.com/joshS28/dublin-bus-hacs`
 6. Select category "Integration"
 7. Click "Add"
 8. Search for "Dublin Bus RTPI" and install

@@ -41,4 +41,4 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Includes proper error handling and logging
 - Supports Home Assistant 2023.1.0+
 
-[1.0.0]: https://github.com/joshS28/north-dublin-dog-walker/releases/tag/v1.0.0
+[1.0.0]: https://github.com/joshS28/dublin-bus-hacs/releases/tag/v1.0.0
